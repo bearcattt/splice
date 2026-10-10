@@ -50,7 +50,8 @@ enum AppleLoginErrorCode {
     accountLocked = -20209,
     invalidValidationCode = -21669,
     invalidPassword = -22406,
-    unableToSignIn = -36607
+    unableToSignIn = -36607,
+    serviceUnavailable = 503
 }
 
 struct AppleLoginError {
@@ -261,7 +262,11 @@ package class AppleAccount {
 
         // Fetch URLs from Apple servers
         log.debug_("Fetching URL bag...");
-        auto urlsPlist = Plist.fromXml(request.get("https://gsa.apple.com/grandslam/GsService2/lookup").responseBody().data!string())["urls"]
+        auto lookupResponse = request.get("https://gsa.apple.com/grandslam/GsService2/lookup");
+        AppleLoginError httpError;
+        if (!checkHttpResponse(lookupResponse, "URL bag lookup", httpError))
+            return AppleLoginResponse(httpError);
+        auto urlsPlist = Plist.fromXml(lookupResponse.responseBody().data!string())["urls"]
             .dict().native();
         log.debug_("URL bag OK.");
 
@@ -294,21 +299,24 @@ package class AppleAccount {
         log.trace(request1Str);
 
         log.debug_("Sending first auth request...");
-        auto response1Str = request.post(urls["gsService"], request1Str).responseBody().data!string();
+        auto response1 = request.post(urls["gsService"], request1Str);
+        if (!checkHttpResponse(response1, "SRP initialization", httpError))
+            return AppleLoginResponse(httpError);
+        auto response1Str = response1.responseBody().data!string();
         log.trace(response1Str);
-        auto response1 = Plist.fromXml(response1Str)["Response"];
+        auto response1Plist = Plist.fromXml(response1Str)["Response"];
         log.debug_("First auth request OK.");
 
-        auto error1 = response1["Status"].dict().validateStatus();
+        auto error1 = response1Plist["Status"].dict().validateStatus();
         if (!error1.isNull()) {
             return AppleLoginResponse(error1.get());
         }
 
-        auto iterations = cast(size_t) response1["i"].uinteger().native();
-        auto salt = response1["s"].data().native();
-        auto selectedProtocol = response1["sp"].str().native();
-        auto cookie = response1["c"].str().native();
-        auto B = response1["B"].data().native();
+        auto iterations = cast(size_t) response1Plist["i"].uinteger().native();
+        auto salt = response1Plist["s"].data().native();
+        auto selectedProtocol = response1Plist["sp"].str().native();
+        auto cookie = response1Plist["c"].str().native();
+        auto B = response1Plist["B"].data().native();
 
         auto M1 = srpSession.step2(appleId, password, selectedProtocol == "s2k_fo", B, salt, iterations);
 
@@ -329,7 +337,10 @@ package class AppleAccount {
         log.trace(request2Str);
 
         log.debug_("Sending the second request...");
-        auto response2Str = request.post(urls["gsService"], request2Str).responseBody().data!string();
+        auto response2Http = request.post(urls["gsService"], request2Str);
+        if (!checkHttpResponse(response2Http, "SRP completion", httpError))
+            return AppleLoginResponse(httpError);
+        auto response2Str = response2Http.responseBody().data!string();
         log.trace(response2Str);
         log.debug_("Second request OK.");
 
@@ -415,7 +426,10 @@ package class AppleAccount {
             string request3Str = request3.toXml();
             log.trace(request3Str);
 
-            auto response3Str = request.post(urls["gsService"], request3Str).responseBody().data!string();
+            auto response3Http = request.post(urls["gsService"], request3Str);
+            if (!checkHttpResponse(response3Http, "app token exchange", httpError))
+                return AppleLoginResponse(httpError);
+            auto response3Str = response3Http.responseBody().data!string();
             log.trace(response3Str);
 
             auto response3 = Plist.fromXml(response3Str)["Response"].dict();
@@ -603,6 +617,30 @@ package class AppleAccount {
 }
 
 private:
+bool checkHttpResponse(Response response, string operation, out AppleLoginError error) {
+    if (response.code >= 200 && response.code < 300)
+        return true;
+
+    auto code = response.code;
+    auto errorCode = httpErrorCode(code);
+    error = AppleLoginError(
+        errorCode,
+        format!"Apple %s failed with HTTP %d. The service may be temporarily unavailable."(operation, code)
+    );
+    getLogger().warnF!"Apple %s returned HTTP %d; skipping plist parsing."(operation, code);
+    return false;
+}
+
+private AppleLoginErrorCode httpErrorCode(int statusCode) {
+    return statusCode == 503 ? AppleLoginErrorCode.serviceUnavailable : AppleLoginErrorCode.unableToSignIn;
+}
+
+unittest {
+    // The mapping is deliberately independent of credentials or a live Apple service.
+    assert(httpErrorCode(503) == AppleLoginErrorCode.serviceUnavailable);
+    assert(httpErrorCode(401) == AppleLoginErrorCode.unableToSignIn);
+}
+
 Nullable!AppleLoginError validateStatus(PlistDict status) {
     long errorCode = cast(long) status["ec"].uinteger().native();
     if (!errorCode) {

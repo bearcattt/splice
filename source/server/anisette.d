@@ -27,7 +27,7 @@ import std.datetime;
 import std.datetime.systime;
 import std.format : format;
 import std.json;
-import std.string : toLower;
+import std.string : indexOf, toLower;
 
 import requests;
 
@@ -39,6 +39,10 @@ import utils;
 
 /// The default value for `X-Apple-I-MD-RINFO`, shared by local and remote paths.
 enum anisetteRINFO = "17106176";
+
+/// Apple now rejects the old Xcode client identity with HTTP 503 during GSA login.
+/// This matches the akd identity used by SideStore 0.7.0-alpha.
+enum anisetteClientInfo = "<MacBookPro18,3> <macOS;26.6;25F84> <com.apple.AuthKit/1 (com.apple.akd/1.0)>";
 
 /**
  * A single coherent set of anisette header values for one GSA request.
@@ -79,9 +83,9 @@ class AnisetteException : Exception {
 }
 
 /**
- * The historical, local emulation path: anisette values come from a provisioned
- * Android ADI plus a few `Device` fields. Output is byte-for-byte identical to
- * what `AppleAccount` produced inline before the abstraction was introduced.
+ * The local emulation path: anisette values come from a provisioned Android ADI
+ * plus device identity fields, with the current akd client identity required by
+ * Apple's GrandSlam service.
  */
 final class LocalAnisetteProvider : AnisetteProvider {
     private Device device;
@@ -102,7 +106,7 @@ final class LocalAnisetteProvider : AnisetteProvider {
         h.routingInfo = anisetteRINFO;
         h.localUserUUID = device.localUserUUID();
         h.deviceId = device.uniqueDeviceIdentifier();
-        h.clientInfo = device.serverFriendlyDescription();
+        h.clientInfo = anisetteClientInfo;
         h.clientTime = time.stripMilliseconds().toISOExtString();
         h.timeZone = time.timezone.dstName;
         h.locale = locale();
@@ -231,6 +235,11 @@ private string orLocal(string serverValue, lazy string fallback) {
 // ---------------------------------------------------------------------------
 // unittests
 // ---------------------------------------------------------------------------
+
+unittest {
+    assert(anisetteClientInfo.indexOf("com.apple.akd/1.0") >= 0);
+    assert(anisetteClientInfo.indexOf("com.apple.dt.Xcode") < 0);
+}
 
 unittest {
     // A typical anisette-v3 GET / response, deliberately using the `X-MMe-Client-Info`
