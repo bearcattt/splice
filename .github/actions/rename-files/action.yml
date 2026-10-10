@@ -2,6 +2,10 @@ name: Rename files
 description: Move files around in the output folder with consistent naming schemes.
 
 inputs:
+  binary-name:
+    description: Name of the executable produced by the frontend build
+    required: false
+    default: splice
   build-tag:
     description: Tag to put in the file name
 
@@ -16,19 +20,19 @@ runs:
     - if: ${{ matrix.target == 'macos' }}
       name: (macOS) Rename files
       shell: bash
-      run: mv "${{github.workspace}}/bin/splice" "${{github.workspace}}/bin/splice-${{ inputs.build-tag }}" # TODO make an app bundle
+      run: mv "${{github.workspace}}/bin/${{ inputs.binary-name }}" "${{github.workspace}}/bin/splice-${{ inputs.build-tag }}" # TODO make an app bundle
 
     - if: ${{ matrix.target == 'windows' }}
       name: (Windows) Rename files
       shell: bash
       run: |
-        mv "${{github.workspace}}/bin/splice.exe" "${{github.workspace}}/bin/splice-${{ inputs.build-tag }}.exe"
-        mv "${{github.workspace}}/bin/splice.pdb" "${{github.workspace}}/bin/splice-${{ inputs.build-tag }}.pdb"
+          mv "${{github.workspace}}/bin/${{ inputs.binary-name }}.exe" "${{github.workspace}}/bin/splice-${{ inputs.build-tag }}.exe"
+          mv "${{github.workspace}}/bin/${{ inputs.binary-name }}.pdb" "${{github.workspace}}/bin/splice-${{ inputs.build-tag }}.pdb"
 
     - if: ${{ matrix.target == 'linux' }}
       name: (Linux) Rename files
       shell: bash
-      run: mv "${{github.workspace}}/bin/splice" "${{github.workspace}}/bin/splice-${{ inputs.build-tag }}"
+      run: mv "${{github.workspace}}/bin/${{ inputs.binary-name }}" "${{github.workspace}}/bin/splice-${{ inputs.build-tag }}"
 
     - if: ${{ matrix.target == 'linux' }}
       name: (Linux) Put debug symbols in a separate file
