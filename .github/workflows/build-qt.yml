@@ -110,9 +110,11 @@ jobs:
 
       - name: Set-up Qt for cross-compilation
         run: |
-          brew fetch --force --bottle-tag=monterey llvm
-          brew install --ignore-dependencies $(brew --cache --bottle-tag=monterey llvm)
-          cp /home/linuxbrew/.linuxbrew/Cellar/llvm/*/lib/c++/* $HOME/ldc2-*-osx-x86_64/lib
+          brew fetch --force --bottle-tag=sonoma llvm@18
+          LLVM_BOTTLE="$(brew --cache --bottle-tag=sonoma llvm@18)"
+          test -f "$LLVM_BOTTLE"
+          brew install --ignore-dependencies "$LLVM_BOTTLE"
+          cp /home/linuxbrew/.linuxbrew/Cellar/llvm@18/*/lib/c++/* $HOME/ldc2-*-osx-x86_64/lib
           rm -rf /home/linuxbrew/.linuxbrew
           cp -r $Qt5_DIR/lib/* $HOME/ldc2-*-osx-x86_64/lib
 
@@ -212,9 +214,11 @@ jobs:
 
       - name: Set-up Qt for cross-compilation
         run: |
-          brew fetch --force --bottle-tag=arm64_monterey llvm
-          brew install --ignore-dependencies $(brew --cache --bottle-tag=arm64_monterey llvm)
-          cp /home/linuxbrew/.linuxbrew/Cellar/llvm/*/lib/c++/* $HOME/ldc2-*-osx-arm64/lib
+          brew fetch --force --bottle-tag=arm64_sequoia llvm@18
+          LLVM_BOTTLE="$(brew --cache --bottle-tag=arm64_sequoia llvm@18)"
+          test -f "$LLVM_BOTTLE"
+          brew install --ignore-dependencies "$LLVM_BOTTLE"
+          cp /home/linuxbrew/.linuxbrew/Cellar/llvm@18/*/lib/c++/* $HOME/ldc2-*-osx-arm64/lib
           rm -rf /home/linuxbrew/.linuxbrew
           cp -r $Qt5_DIR/lib/* $HOME/ldc2-*-osx-arm64/lib
 
